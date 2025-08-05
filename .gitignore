@@ -3,6 +3,12 @@
 .env.local
 .env.production
 
+# Python virtual environment
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
 # Node modules
 node_modules/
 

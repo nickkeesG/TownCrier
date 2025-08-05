@@ -1,0 +1,5 @@
+# Slack API client
+slack-sdk>=3.27.0
+
+# Environment variables
+python-dotenv>=1.0.0
