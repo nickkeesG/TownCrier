@@ -3,6 +3,9 @@
 .env.local
 .env.production
 
+# Data files
+data/
+
 # Python virtual environment
 venv/
 __pycache__/
