@@ -2,9 +2,26 @@
 
 import json
 import os
+import re
 import time
 from datetime import datetime
 from src.slack_client import TownCrierSlackClient
+
+def resolve_user_mentions(text, user_cache):
+    """Replace <@USER_ID> mentions with user names"""
+    if not text:
+        return text
+    
+    # Find all user mentions in the format <@USER_ID>
+    user_mentions = re.findall(r'<@(U[A-Z0-9]+)>', text)
+    
+    for user_id in user_mentions:
+        if user_id in user_cache:
+            user_name = user_cache[user_id].get('display_name') or user_cache[user_id].get('real_name') or user_cache[user_id].get('name')
+            if user_name and user_name != 'Unknown':
+                text = text.replace(f'<@{user_id}>', f'@{user_name}')
+    
+    return text
 
 def collect_all_messages():
     print("=== TownCrier Message Collection ===\n")
@@ -19,6 +36,10 @@ def collect_all_messages():
     # Get all lab channels
     print("\nFinding lab-notes and surface-area channels...")
     channels = client.get_lab_channels()
+    
+    # Initialize user cache for resolving user IDs to names
+    user_cache = {}
+    print("\nInitializing user cache...")
     
     # Collect messages from all accessible channels
     all_data = {
@@ -49,13 +70,30 @@ def collect_all_messages():
             
             for msg in messages:
                 msg_text = msg.get('text', '')
-                msg_head = msg_text[:100] + "..." if len(msg_text) > 100 else msg_text
+                user_id = msg.get('user')
+                
+                # Resolve user ID to name and cache it
+                user_name = None
+                if user_id and user_id not in user_cache:
+                    print(f"    🔍 Looking up user: {user_id}")
+                    user_info = client.get_user_info(user_id)
+                    user_cache[user_id] = user_info
+                
+                if user_id and user_id in user_cache:
+                    user_info = user_cache[user_id]
+                    user_name = user_info.get('display_name') or user_info.get('real_name') or user_info.get('name')
+                
+                # Replace user mentions in message text
+                resolved_text = resolve_user_mentions(msg_text, user_cache)
+                
+                msg_head = resolved_text[:100] + "..." if len(resolved_text) > 100 else resolved_text
                 print(f"    📄 Message head: {repr(msg_head)}")
                 
                 processed_msg = {
                     "timestamp": msg.get('ts'),
-                    "user": msg.get('user'),
-                    "text": msg_text,
+                    "user_id": user_id,
+                    "user_name": user_name or "Unknown",
+                    "text": resolved_text,
                     "type": msg.get('type'),
                     "subtype": msg.get('subtype'),
                     "thread_ts": msg.get('thread_ts'),
@@ -79,13 +117,30 @@ def collect_all_messages():
                     processed_replies = []
                     for reply in thread_replies:
                         reply_text = reply.get('text', '')
-                        reply_head = reply_text[:100] + "..." if len(reply_text) > 100 else reply_text
+                        reply_user_id = reply.get('user')
+                        
+                        # Resolve reply user ID to name and cache it
+                        reply_user_name = None
+                        if reply_user_id and reply_user_id not in user_cache:
+                            print(f"      🔍 Looking up reply user: {reply_user_id}")
+                            user_info = client.get_user_info(reply_user_id)
+                            user_cache[reply_user_id] = user_info
+                        
+                        if reply_user_id and reply_user_id in user_cache:
+                            user_info = user_cache[reply_user_id]
+                            reply_user_name = user_info.get('display_name') or user_info.get('real_name') or user_info.get('name')
+                        
+                        # Replace user mentions in reply text
+                        resolved_reply_text = resolve_user_mentions(reply_text, user_cache)
+                        
+                        reply_head = resolved_reply_text[:100] + "..." if len(resolved_reply_text) > 100 else resolved_reply_text
                         print(f"      🧵 Reply head: {repr(reply_head)}")
                         
                         processed_reply = {
                             "timestamp": reply.get('ts'),
-                            "user": reply.get('user'),
-                            "text": reply_text,
+                            "user_id": reply_user_id,
+                            "user_name": reply_user_name or "Unknown",
+                            "text": resolved_reply_text,
                             "type": reply.get('type'),
                             "subtype": reply.get('subtype'),
                             "thread_ts": reply.get('thread_ts')
@@ -137,6 +192,10 @@ def collect_all_messages():
     print(f"✅ Accessible channels: {accessible_count}")
     print(f"❌ Inaccessible channels: {inaccessible_count}")
     print(f"📊 Total messages collected: {total_messages}")
+    print(f"👥 Users resolved: {len(user_cache)}")
+    
+    # Add user cache to data
+    all_data["user_cache"] = user_cache
     
     # Save to file in data folder
     os.makedirs("data", exist_ok=True)

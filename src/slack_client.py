@@ -18,7 +18,7 @@ class TownCrierSlackClient:
     
     def test_connection(self):
         try:
-            time.sleep(5)  # Rate limiting before API call
+            time.sleep(60)  # Rate limiting before API call
             response = self.client.auth_test()
             print(f"✅ Connected to Slack successfully!")
             print(f"   Bot name: {response['user']}")
@@ -33,7 +33,7 @@ class TownCrierSlackClient:
         try:
             # First try just public channels
             print("Trying public channels first...")
-            time.sleep(5)  # Rate limiting before API call
+            time.sleep(60)  # Rate limiting before API call
             response = self.client.conversations_list(
                 types="public_channel",
                 limit=200
@@ -142,7 +142,7 @@ class TownCrierSlackClient:
     
     def get_thread_replies(self, channel_id, thread_ts):
         try:
-            time.sleep(5)  # Rate limiting before API call
+            time.sleep(60)  # Rate limiting before API call
             response = self.client.conversations_replies(
                 channel=channel_id,
                 ts=thread_ts
@@ -155,3 +155,72 @@ class TownCrierSlackClient:
         except SlackApiError as e:
             print(f"❌ Failed to get thread replies: {e.response['error']}")
             return []
+    
+    def post_message(self, channel_id, text):
+        try:
+            time.sleep(60)  # Rate limiting before API call
+            response = self.client.chat_postMessage(
+                channel=channel_id,
+                text=text
+            )
+            print(f"✅ Message posted successfully!")
+            return response
+            
+        except SlackApiError as e:
+            print(f"❌ Failed to post message: {e.response['error']}")
+            raise
+    
+    def post_reply(self, channel_id, thread_ts, text):
+        try:
+            time.sleep(5)  # Reduced delay for replies
+            response = self.client.chat_postMessage(
+                channel=channel_id,
+                thread_ts=thread_ts,
+                text=text
+            )
+            print(f"✅ Reply posted successfully!")
+            return response
+            
+        except SlackApiError as e:
+            print(f"❌ Failed to post reply: {e.response['error']}")
+            raise
+    
+    def upload_file(self, channel_id, file_path, filename=None, initial_comment=None):
+        try:
+            time.sleep(60)  # Rate limiting before API call
+            
+            if filename is None:
+                filename = os.path.basename(file_path)
+            
+            response = self.client.files_upload_v2(
+                channel=channel_id,
+                file=file_path,
+                filename=filename,
+                initial_comment=initial_comment
+            )
+            print(f"✅ File uploaded successfully!")
+            return response
+            
+        except SlackApiError as e:
+            print(f"❌ Failed to upload file: {e.response['error']}")
+            raise
+    
+    def get_user_info(self, user_id):
+        try:
+            time.sleep(60)  # Rate limiting before API call
+            response = self.client.users_info(user=user_id)
+            user = response['user']
+            return {
+                'id': user_id,
+                'name': user.get('name', 'Unknown'),
+                'real_name': user.get('real_name', 'Unknown'),
+                'display_name': user.get('profile', {}).get('display_name', ''),
+            }
+        except SlackApiError as e:
+            print(f"⚠️ Failed to get user info for {user_id}: {e.response['error']}")
+            return {
+                'id': user_id,
+                'name': 'Unknown',
+                'real_name': 'Unknown',
+                'display_name': '',
+            }

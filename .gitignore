@@ -5,6 +5,7 @@
 
 # Data files
 data/
+summaries/
 
 # Python virtual environment
 venv/
