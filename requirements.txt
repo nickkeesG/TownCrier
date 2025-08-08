@@ -1,5 +1,8 @@
 # Slack API client
 slack-sdk>=3.27.0
 
+# Anthropic Claude API client
+anthropic
+
 # Environment variables
 python-dotenv>=1.0.0
