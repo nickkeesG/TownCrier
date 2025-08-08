@@ -6,6 +6,7 @@
 # Data files
 data/
 summaries/
+*.json
 
 # Python virtual environment
 venv/

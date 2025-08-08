@@ -18,7 +18,7 @@ class TownCrierSlackClient:
     
     def test_connection(self):
         try:
-            time.sleep(60)  # Rate limiting before API call
+            time.sleep(30)  # Rate limiting before API call
             response = self.client.auth_test()
             print(f"✅ Connected to Slack successfully!")
             print(f"   Bot name: {response['user']}")
@@ -29,18 +29,39 @@ class TownCrierSlackClient:
             print(f"❌ Failed to connect to Slack: {e.response['error']}")
             raise
     
-    def get_lab_channels(self):
+    def get_all_accessible_channels(self):
         try:
-            # First try just public channels
-            print("Trying public channels first...")
-            time.sleep(60)  # Rate limiting before API call
+            # Get all public channels the bot has access to
+            print("Getting all accessible public channels...")
+            time.sleep(30)  # Rate limiting before API call
             response = self.client.conversations_list(
                 types="public_channel",
                 limit=200
             )
             
             all_channels = response['channels']
-            print(f"Found {len(all_channels)} total channels")
+            print(f"Found {len(all_channels)} total public channels")
+            
+            # Filter for channels the bot is actually a member of
+            accessible_channels = []
+            for channel in all_channels:
+                if channel.get('is_member', False):
+                    accessible_channels.append(channel)
+            
+            print(f"Found {len(accessible_channels)} accessible channels:")
+            for channel in accessible_channels:
+                print(f"  - {channel['name']} (ID: {channel['id']})")
+            
+            return accessible_channels
+            
+        except SlackApiError as e:
+            print(f"❌ Failed to get channels: {e.response['error']}")
+            raise
+    
+    def get_lab_channels(self):
+        """Backward compatibility - get lab-notes and surface-area channels only"""
+        try:
+            all_channels = self.get_all_accessible_channels()
             
             # Filter for lab-notes-* and surface-area-* channels
             lab_channels = []
@@ -49,14 +70,14 @@ class TownCrierSlackClient:
                 if name.startswith('lab-notes-') or name.startswith('surface-area-'):
                     lab_channels.append(channel)
             
-            print(f"Found {len(lab_channels)} lab/surface-area channels:")
+            print(f"Filtered to {len(lab_channels)} lab/surface-area channels:")
             for channel in lab_channels:
                 print(f"  - {channel['name']} (ID: {channel['id']})")
             
             return lab_channels
             
         except SlackApiError as e:
-            print(f"❌ Failed to get channels: {e.response['error']}")
+            print(f"❌ Failed to get lab channels: {e.response['error']}")
             raise
     
     def get_channel_history(self, channel_id, days=7):
@@ -73,7 +94,7 @@ class TownCrierSlackClient:
             
             while True:
                 page_count += 1
-                time.sleep(60)  # Rate limiting before API call
+                time.sleep(30)  # Rate limiting before API call
                 
                 # Build API call parameters
                 # Note: Slack's conversations.history API now has a limit of 15 messages per request
@@ -142,7 +163,7 @@ class TownCrierSlackClient:
     
     def get_thread_replies(self, channel_id, thread_ts):
         try:
-            time.sleep(60)  # Rate limiting before API call
+            time.sleep(30)  # Rate limiting before API call
             response = self.client.conversations_replies(
                 channel=channel_id,
                 ts=thread_ts
@@ -156,38 +177,62 @@ class TownCrierSlackClient:
             print(f"❌ Failed to get thread replies: {e.response['error']}")
             return []
     
-    def post_message(self, channel_id, text):
-        try:
-            time.sleep(60)  # Rate limiting before API call
-            response = self.client.chat_postMessage(
-                channel=channel_id,
-                text=text
-            )
-            print(f"✅ Message posted successfully!")
-            return response
-            
-        except SlackApiError as e:
-            print(f"❌ Failed to post message: {e.response['error']}")
-            raise
+    def post_message(self, channel_id, text, max_retries=3):
+        for attempt in range(max_retries):
+            try:
+                time.sleep(30)  # Rate limiting before API call
+                response = self.client.chat_postMessage(
+                    channel=channel_id,
+                    text=text
+                )
+                print(f"✅ Message posted successfully!")
+                return response
+                
+            except SlackApiError as e:
+                error_code = e.response['error']
+                print(f"❌ Failed to post message (attempt {attempt + 1}/{max_retries}): {error_code}")
+                
+                if error_code == 'rate_limited':
+                    retry_after = int(e.response.get('headers', {}).get('Retry-After', 60))
+                    print(f"   Rate limited, retrying in {retry_after} seconds...")
+                    time.sleep(retry_after)
+                elif attempt < max_retries - 1:  # Not the last attempt
+                    print(f"   Retrying in 10 seconds...")
+                    time.sleep(10)
+                else:
+                    print(f"   All {max_retries} attempts failed")
+                    raise
     
-    def post_reply(self, channel_id, thread_ts, text):
-        try:
-            time.sleep(5)  # Reduced delay for replies
-            response = self.client.chat_postMessage(
-                channel=channel_id,
-                thread_ts=thread_ts,
-                text=text
-            )
-            print(f"✅ Reply posted successfully!")
-            return response
-            
-        except SlackApiError as e:
-            print(f"❌ Failed to post reply: {e.response['error']}")
-            raise
+    def post_reply(self, channel_id, thread_ts, text, max_retries=3):
+        for attempt in range(max_retries):
+            try:
+                time.sleep(5)  # Reduced delay for replies
+                response = self.client.chat_postMessage(
+                    channel=channel_id,
+                    thread_ts=thread_ts,
+                    text=text
+                )
+                print(f"✅ Reply posted successfully!")
+                return response
+                
+            except SlackApiError as e:
+                error_code = e.response['error']
+                print(f"❌ Failed to post reply (attempt {attempt + 1}/{max_retries}): {error_code}")
+                
+                if error_code == 'rate_limited':
+                    retry_after = int(e.response.get('headers', {}).get('Retry-After', 60))
+                    print(f"   Rate limited, retrying in {retry_after} seconds...")
+                    time.sleep(retry_after)
+                elif attempt < max_retries - 1:  # Not the last attempt
+                    print(f"   Retrying in 10 seconds...")
+                    time.sleep(10)
+                else:
+                    print(f"   All {max_retries} attempts failed")
+                    raise
     
     def upload_file(self, channel_id, file_path, filename=None, initial_comment=None):
         try:
-            time.sleep(60)  # Rate limiting before API call
+            time.sleep(30)  # Rate limiting before API call
             
             if filename is None:
                 filename = os.path.basename(file_path)
@@ -207,7 +252,7 @@ class TownCrierSlackClient:
     
     def get_user_info(self, user_id):
         try:
-            time.sleep(60)  # Rate limiting before API call
+            time.sleep(30)  # Rate limiting before API call
             response = self.client.users_info(user=user_id)
             user = response['user']
             return {

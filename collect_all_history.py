@@ -23,14 +23,21 @@ def resolve_user_mentions(text, user_cache):
     
     return text
 
-def collect_all_messages():
-    print("=== TownCrier Message Collection ===\n")
+def collect_all_history():
+    print("=== TownCrier Complete Historical Collection ===\n")
+    print("⚠️  WARNING: This will collect ALL messages from ALL accessible channels")
+    print("⚠️  This may take MANY HOURS and use significant API calls")
+    
+    confirm = input("\nDo you want to continue? (yes/NO): ").strip().lower()
+    if confirm != 'yes':
+        print("Collection cancelled.")
+        return
     
     # Initialize client
     client = TownCrierSlackClient()
     
     # Test connection
-    print("Testing connection...")
+    print("\nTesting connection...")
     client.test_connection()
     
     # Get all accessible channels
@@ -39,11 +46,12 @@ def collect_all_messages():
     
     # Initialize user cache for resolving user IDs to names
     user_cache = {}
-    print("\nInitializing user cache...")
+    print(f"\nInitializing user cache...")
     
     # Collect messages from all accessible channels
     all_data = {
         "collection_time": datetime.now().isoformat(),
+        "collection_type": "complete_history",
         "channels": {}
     }
     
@@ -51,8 +59,8 @@ def collect_all_messages():
     inaccessible_count = 0
     total_messages = 0
     
-    print(f"\nCollecting messages from {len(channels)} channels...")
-    print("=" * 50)
+    print(f"\nCollecting ALL HISTORICAL messages from {len(channels)} channels...")
+    print("=" * 70)
     
     for i, channel in enumerate(channels, 1):
         channel_name = channel['name']
@@ -62,7 +70,9 @@ def collect_all_messages():
             # Progress bar
             progress = "█" * (i * 20 // len(channels)) + "░" * (20 - (i * 20 // len(channels)))
             print(f"[{progress}] {i:2d}/{len(channels)} 📥 {channel_name}...", end=" ")
-            messages = client.get_channel_history(channel_id, days=7)
+            
+            # Get ALL channel history (no time limit)
+            messages = get_complete_channel_history(client, channel_id)
             
             # Process messages to extract useful info and collect threaded replies
             processed_messages = []
@@ -75,7 +85,7 @@ def collect_all_messages():
                 # Resolve user ID to name and cache it
                 user_name = None
                 if user_id and user_id not in user_cache:
-                    print(f"    🔍 Looking up user: {user_id}")
+                    print(f"\n    🔍 Looking up user: {user_id}")
                     user_info = client.get_user_info(user_id)
                     user_cache[user_id] = user_info
                 
@@ -87,7 +97,8 @@ def collect_all_messages():
                 resolved_text = resolve_user_mentions(msg_text, user_cache)
                 
                 msg_head = resolved_text[:100] + "..." if len(resolved_text) > 100 else resolved_text
-                print(f"    📄 Message head: {repr(msg_head)}")
+                if len(msg_text) > 100:  # Only print for longer messages to reduce spam
+                    print(f"\n    📄 Message head: {repr(msg_head)}")
                 
                 processed_msg = {
                     "timestamp": msg.get('ts'),
@@ -103,16 +114,11 @@ def collect_all_messages():
                 
                 # Check if this message has replies (it's a thread parent)
                 reply_count = msg.get('reply_count', 0)
-                has_thread_ts = msg.get('thread_ts')
-                
-                print(f"    DEBUG: reply_count={reply_count}, thread_ts={has_thread_ts}")
                 
                 # Fetch replies for any message that has replies
                 if reply_count > 0:
-                    print(f"    FETCHING replies for parent message: {msg.get('text', '')[:50]}...")
-                    # This is the parent message of a thread
+                    print(f"\n    FETCHING {reply_count} replies for thread...")
                     thread_replies = client.get_thread_replies(channel_id, msg.get('ts'))
-                    print(f"    Got {len(thread_replies)} replies")
                     
                     processed_replies = []
                     for reply in thread_replies:
@@ -132,9 +138,6 @@ def collect_all_messages():
                         
                         # Replace user mentions in reply text
                         resolved_reply_text = resolve_user_mentions(reply_text, user_cache)
-                        
-                        reply_head = resolved_reply_text[:100] + "..." if len(resolved_reply_text) > 100 else resolved_reply_text
-                        print(f"      🧵 Reply head: {repr(reply_head)}")
                         
                         processed_reply = {
                             "timestamp": reply.get('ts'),
@@ -163,13 +166,13 @@ def collect_all_messages():
             total_messages += len(messages) + thread_replies_count
             
             if thread_replies_count > 0:
-                print(f"✅ {len(messages)} messages + {thread_replies_count} replies")
+                print(f"\n✅ {len(messages)} messages + {thread_replies_count} replies")
             else:
-                print(f"✅ {len(messages)} messages")
+                print(f"\n✅ {len(messages)} messages")
             
         except Exception as e:
             if "not_in_channel" in str(e):
-                print("❌ Bot not in channel")
+                print("\n❌ Bot not in channel")
                 all_data["channels"][channel_name] = {
                     "id": channel_id,
                     "error": "bot_not_in_channel",
@@ -178,7 +181,7 @@ def collect_all_messages():
                 }
                 inaccessible_count += 1
             else:
-                print(f"❌ Error: {str(e)}")
+                print(f"\n❌ Error: {str(e)}")
                 all_data["channels"][channel_name] = {
                     "id": channel_id,
                     "error": str(e),
@@ -187,8 +190,8 @@ def collect_all_messages():
                 }
                 inaccessible_count += 1
     
-    print("=" * 50)
-    print(f"Collection complete!")
+    print("=" * 70)
+    print(f"Historical collection complete!")
     print(f"✅ Accessible channels: {accessible_count}")
     print(f"❌ Inaccessible channels: {inaccessible_count}")
     print(f"📊 Total messages collected: {total_messages}")
@@ -197,15 +200,77 @@ def collect_all_messages():
     # Add user cache to data
     all_data["user_cache"] = user_cache
     
-    # Save to file in data folder
-    os.makedirs("data", exist_ok=True)
-    filename = f"data/messages_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    # Save to main folder
+    filename = f"complete_history_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
     with open(filename, 'w', encoding='utf-8') as f:
         json.dump(all_data, f, indent=2, ensure_ascii=False)
     
-    print(f"💾 Data saved to: {filename}")
+    print(f"💾 Complete history saved to: {filename}")
     
     return all_data
 
+def get_complete_channel_history(client, channel_id):
+    """Get ALL messages from a channel with no time limit"""
+    try:
+        print(f"\n    Fetching complete history for channel...")
+        
+        all_messages = []
+        cursor = None
+        page_count = 0
+        
+        while True:
+            page_count += 1
+            time.sleep(30)  # Rate limiting before API call
+            
+            # Build API call parameters
+            params = {
+                'channel': channel_id,
+                'limit': 15  # Current Slack API limit per request
+            }
+            
+            if cursor:
+                params['cursor'] = cursor
+            
+            print(f"\n      Page {page_count}: requesting up to {params['limit']} messages...")
+            
+            # Retry logic for rate limits
+            max_retries = 3
+            for retry in range(max_retries):
+                try:
+                    response = client.client.conversations_history(**params)
+                    break  # Success, exit retry loop
+                except Exception as e:
+                    if 'rate_limited' in str(e):
+                        retry_after = 120  # Default retry time
+                        print(f"\n      Rate limited, retrying in {retry_after} seconds (attempt {retry + 1}/{max_retries})...")
+                        time.sleep(retry_after)
+                    else:
+                        raise  # Re-raise non-rate-limit errors
+            else:
+                # All retries exhausted
+                raise Exception("Rate limit retries exhausted")
+            
+            page_messages = response['messages']
+            all_messages.extend(page_messages)
+            
+            print(f"\n      Page {page_count}: got {len(page_messages)} messages (total: {len(all_messages)})")
+            
+            # Check if we have more pages
+            if not response.get('has_more', False):
+                print(f"\n      Reached end of channel history")
+                break
+                
+            cursor = response.get('response_metadata', {}).get('next_cursor')
+            if not cursor:
+                break
+        
+        print(f"\n    Found {len(all_messages)} total messages in channel")
+        
+        return all_messages
+        
+    except Exception as e:
+        print(f"\n    ❌ Failed to get complete channel history: {str(e)}")
+        raise
+
 if __name__ == "__main__":
-    collect_all_messages()
+    collect_all_history()
