@@ -42,8 +42,8 @@ def main():
     print("Testing connection...")
     client.test_connection()
     
-    # Get all channels to find test-for-bot
-    print("\nLooking for #test-for-bot channel...")
+    # Get all channels to find daily-overview
+    print("\nLooking for #daily-overview channel...")
     try:
         response = client.client.conversations_list(
             types="public_channel",
@@ -52,12 +52,12 @@ def main():
         
         target_channel = None
         for channel in response['channels']:
-            if channel['name'] == 'test-for-bot':
+            if channel['name'] == 'daily-overview':
                 target_channel = channel
                 break
         
         if not target_channel:
-            print("❌ Could not find #test-for-bot channel")
+            print("❌ Could not find #daily-overview channel")
             print("Available channels:")
             for channel in response['channels']:
                 print(f"  - #{channel['name']}")

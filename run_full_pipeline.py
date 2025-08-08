@@ -236,7 +236,7 @@ def step3_post_to_slack():
         # Test connection
         client.test_connection()
         
-        # Get all channels to find test-for-bot
+        # Get all channels to find daily-overview
         response = client.client.conversations_list(
             types="public_channel",
             limit=200
@@ -244,12 +244,12 @@ def step3_post_to_slack():
         
         target_channel = None
         for channel in response['channels']:
-            if channel['name'] == 'test-for-bot':
+            if channel['name'] == 'daily-overview':
                 target_channel = channel
                 break
         
         if not target_channel:
-            print("❌ Could not find #test-for-bot channel")
+            print("❌ Could not find #daily-overview channel")
             return False, 0
         
         print(f"✅ Found #{target_channel['name']} (ID: {target_channel['id']})")
