@@ -7,7 +7,7 @@ import time
 from datetime import datetime
 from src.slack_client import TownCrierSlackClient
 
-def resolve_user_mentions(text, user_cache):
+def resolve_user_mentions(text, user_cache, client=None):
     """Replace <@USER_ID> mentions with user names"""
     if not text:
         return text
@@ -16,6 +16,16 @@ def resolve_user_mentions(text, user_cache):
     user_mentions = re.findall(r'<@(U[A-Z0-9]+)>', text)
     
     for user_id in user_mentions:
+        # If user not in cache and we have a client, fetch user info
+        if user_id not in user_cache and client:
+            try:
+                print(f"    🔍 Looking up mentioned user: {user_id}")
+                user_info = client.get_user_info(user_id)
+                user_cache[user_id] = user_info
+            except Exception as e:
+                print(f"    ❌ Failed to lookup user {user_id}: {e}")
+                continue
+        
         if user_id in user_cache:
             user_name = user_cache[user_id].get('display_name') or user_cache[user_id].get('real_name') or user_cache[user_id].get('name')
             if user_name and user_name != 'Unknown':
@@ -84,7 +94,7 @@ def collect_all_messages():
                     user_name = user_info.get('display_name') or user_info.get('real_name') or user_info.get('name')
                 
                 # Replace user mentions in message text
-                resolved_text = resolve_user_mentions(msg_text, user_cache)
+                resolved_text = resolve_user_mentions(msg_text, user_cache, client)
                 
                 msg_head = resolved_text[:100] + "..." if len(resolved_text) > 100 else resolved_text
                 print(f"    📄 Message head: {repr(msg_head)}")
@@ -131,7 +141,7 @@ def collect_all_messages():
                             reply_user_name = user_info.get('display_name') or user_info.get('real_name') or user_info.get('name')
                         
                         # Replace user mentions in reply text
-                        resolved_reply_text = resolve_user_mentions(reply_text, user_cache)
+                        resolved_reply_text = resolve_user_mentions(reply_text, user_cache, client)
                         
                         reply_head = resolved_reply_text[:100] + "..." if len(resolved_reply_text) > 100 else resolved_reply_text
                         print(f"      🧵 Reply head: {repr(reply_head)}")
