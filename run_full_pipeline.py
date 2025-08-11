@@ -275,6 +275,40 @@ def step3_post_to_slack():
         print(f"❌ Step 3 failed: {str(e)}")
         return False, time.time() - step_start
 
+def step4_post_to_external_endpoint():
+    """Step 4: Post the most recent JSON to external endpoint"""
+    print("\n🔄 STEP 4: Posting latest JSON to external endpoint...")
+    step_start = time.time()
+    
+    try:
+        # Import the post_latest_data functionality
+        from post_latest_data import find_most_recent_json, post_json_to_slack
+        
+        # Get bearer token from environment variable
+        bearer_token = os.getenv('BEARER_TOKEN')
+        if not bearer_token:
+            print("⚠️  BEARER_TOKEN not set - skipping external endpoint posting")
+            print("   Set with: export BEARER_TOKEN='your_token_here'")
+            return True, 0  # Don't fail the pipeline, just skip this step
+        
+        # Find and post the most recent JSON
+        most_recent_file = find_most_recent_json()
+        print(f"📤 Posting {most_recent_file.name} to external endpoint...")
+        
+        success = post_json_to_slack(most_recent_file, bearer_token)
+        
+        step_time = time.time() - step_start
+        if success:
+            print(f"✅ Step 4 completed in {step_time:.1f} seconds")
+            return True, step_time
+        else:
+            print(f"❌ Step 4 failed in {step_time:.1f} seconds")
+            return False, step_time
+            
+    except Exception as e:
+        print(f"❌ Step 4 failed: {str(e)}")
+        return False, time.time() - step_start
+
 def main():
     print("=" * 80)
     print("🚀 TOWNCRIER FULL PIPELINE")
@@ -300,6 +334,11 @@ def main():
         print("\n❌ Pipeline failed at Step 3")
         return
     
+    # Step 4: Post to external endpoint
+    success4, time4 = step4_post_to_external_endpoint()
+    if not success4:
+        print("\n⚠️  Step 4 failed, but continuing...")
+    
     # Final summary
     total_time = time.time() - total_start
     
@@ -309,6 +348,7 @@ def main():
     print(f"⏱️  Step 1 (Collection): {time1/60:.1f} minutes")
     print(f"⏱️  Step 2 (Summarization): {time2/60:.1f} minutes") 
     print(f"⏱️  Step 3 (Posting): {time3/60:.1f} minutes")
+    print(f"⏱️  Step 4 (External): {time4:.1f} seconds")
     print(f"⏱️  Total Time: {total_time/60:.1f} minutes ({total_time/3600:.1f} hours)")
     print("=" * 80)
 
