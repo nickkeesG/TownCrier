@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from src.slack_client import TownCrierSlackClient
 
 def find_latest_summary():
@@ -81,12 +81,14 @@ def main():
         print("Cancelled.")
         return
     
-    # Post today's date first
-    today_date = datetime.now().strftime("%B %d, %Y")
+    # Post 7-day date range first
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=7)
+    date_range = f"{start_date.strftime('%B %d')} - {end_date.strftime('%B %d, %Y')}"
     print(f"\n📤 Posting date message to #{target_channel['name']}...")
     
     try:
-        date_response = client.post_message(target_channel['id'], today_date)
+        date_response = client.post_message(target_channel['id'], date_range)
         thread_ts = date_response.get('ts')
         print(f"✅ Date message posted successfully!")
         
