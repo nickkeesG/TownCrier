@@ -6,6 +6,7 @@ import requests
 import argparse
 from pathlib import Path
 from datetime import datetime
+from dotenv import load_dotenv
 
 def find_most_recent_json(data_dir="data"):
     """Find the most recently modified JSON file in the data directory."""
@@ -60,11 +61,14 @@ def main():
     parser.add_argument('--all', action='store_true', help='Post all JSON files instead of just the most recent')
     args = parser.parse_args()
     
-    # Get bearer token from environment variable
+    # Load environment variables from .env file
+    load_dotenv()
+    
+    # Get bearer token from .env file
     bearer_token = os.getenv('BEARER_TOKEN')
     if not bearer_token:
-        print("Error: BEARER_TOKEN environment variable not set")
-        print("Set it with: export BEARER_TOKEN='your_token_here'")
+        print("Error: BEARER_TOKEN not found in .env file")
+        print("Add it to .env file: BEARER_TOKEN=your_token_here")
         return 1
     
     try:

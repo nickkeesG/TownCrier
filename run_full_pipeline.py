@@ -286,11 +286,14 @@ def step4_post_to_external_endpoint():
         # Import the post_latest_data functionality
         from post_latest_data import find_most_recent_json, post_json_to_slack
         
-        # Get bearer token from environment variable
+        # Load environment variables from .env file
+        load_dotenv()
+        
+        # Get bearer token from .env file
         bearer_token = os.getenv('BEARER_TOKEN')
         if not bearer_token:
-            print("⚠️  BEARER_TOKEN not set - skipping external endpoint posting")
-            print("   Set with: export BEARER_TOKEN='your_token_here'")
+            print("⚠️  BEARER_TOKEN not found in .env file - skipping external endpoint posting")
+            print("   Add to .env file: BEARER_TOKEN=your_token_here")
             return True, 0  # Don't fail the pipeline, just skip this step
         
         # Find and post the most recent JSON
